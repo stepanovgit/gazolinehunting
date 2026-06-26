@@ -2,9 +2,8 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Пробка: 3 в ряд</title>
-    <!-- GSAP для анимаций -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Доберись до заправки</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
     <style>
         body {
@@ -14,7 +13,9 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             display: flex;
             justify-content: center;
-            height: 100vh;
+            /* Исправление для мобильных браузеров */
+            height: 100vh; /* Фолбэк для старых браузеров */
+            height: 100dvh; /* Динамическая высота, учитывающая UI браузера */
             overflow: hidden;
             touch-action: manipulation;
         }
@@ -48,6 +49,8 @@
         #ui-panel {
             background: #1a1a2e;
             padding: 15px 20px;
+            /* Добавляем безопасную зону для iPhone (полоса внизу) */
+            padding-bottom: calc(15px + env(safe-area-inset-bottom));
             border-top: 2px solid #444;
             display: flex;
             flex-direction: column;
@@ -129,7 +132,7 @@
             border-radius: 12px; transition: background 0.2s, color 0.2s; box-sizing: border-box;
         }
         
-        .drop-zone.visible:hover {
+        .drop-zone.visible:hover, .drop-zone:active {
             background: rgba(255, 255, 255, 0.15); color: rgba(255, 255, 255, 0.8);
             border: 2px dashed rgba(255, 255, 255, 0.4);
         }
@@ -171,7 +174,6 @@
 <body>
 
     <div id="app">
-        <!-- Скроллящаяся зона -->
         <div id="road-container">
             <div class="station-sign">
                 <div class="station-title">Доберись до заправки</div>
@@ -184,7 +186,6 @@
             </div>
         </div>
 
-        <!-- Нижняя панель управления -->
         <div id="ui-panel">
             <div class="stats-container">
                 <div class="stat-block">
@@ -202,20 +203,19 @@
             </div>
         </div>
 
-        <!-- Стартовый экран -->
         <div id="start-screen" class="screen">
-            <h1>Пробка: 3 в ряд</h1>
+            <h1>Доберись до заправки</h1>
             <ul class="rules-list">
                 <li><strong>🎯 Цель:</strong> Добраться до колонки, расчистив всю пробку перед своей машиной (с меткой «Я»).</li>
-                <li><strong>🚗 Механика:</strong> Кликни на любую машину, а затем на пустую зону (➕), чтобы переставить её туда.</li>
-                <li><strong>💥 Комбо:</strong> Собери 3 или больше авто одного цвета подряд, чтобы они уехали и ты продвинулся вперед.</li>
-                <li><strong>⚠️ Условия:</strong> Всего 25 ходов. Каждая перестановка, сброс (🔀) или вызов авто (➕) тратит 1 ход.</li>
-                <li><strong>💡 Лайфхак:</strong> Нужных машин нет впереди? Выдергивай их из хвоста пробки (позади тебя)!</li>
+                <li><strong>🚗 Механика:</strong> Кликни на любую машину, а затем на пустую зону (➕) между другими машинами, чтобы переставить её туда.</li>
+                <li><strong>💥 Комбо:</strong> Собери 3 авто одного цвета подряд, чтобы они уехали и ты продвинулся вперед.</li>
+                <li><strong>⚠️ Условия:</strong> Всего 25 ходов. Каждая перестановка, перемешивание (🔀🚗) или вызов авто (➕🚗) тратит 1 ход.</li>
+                <li><strong>🔀🚗 Перемешать:</strong> Кнопка случайно перемешает все машины.</li>
+                <li><strong>➕🚗 Добавить:</strong> Кнопка добавляет машину случайного цвета в конец очереди.</li>
             </ul>
             <button class="btn-primary" onclick="startGame()">ИГРАТЬ</button>
         </div>
 
-        <!-- Экран конца игры -->
         <div id="game-over-screen" class="screen" style="display: none;">
             <h1 id="end-title"></h1>
             <p id="end-desc"></p>
@@ -244,7 +244,7 @@
         let selectedIndex = null;
         let isAnimating = false;
         let gameStarted = false; 
-        let startTime = 0; // Переменная для таймера
+        let startTime = 0; 
         
         const wrapper = document.getElementById('queue-wrapper');
         const dropZonesContainer = document.getElementById('drop-zones-container');
@@ -275,7 +275,7 @@
         function startGame() {
             startScreen.style.display = 'none';
             gameStarted = true;
-            startTime = Date.now(); // Запускаем таймер
+            startTime = Date.now(); 
             
             setTimeout(() => {
                 roadContainer.scrollTo({
@@ -358,8 +358,11 @@
             dz.innerHTML = '➕';
             dz.style.top = topPos + 'px';
             
+            // На мобильных hover работает не так как на десктопе, поэтому добавим еще поддержку touch
             dz.addEventListener('mouseenter', () => hoverDropZone(arrayIdx, isFront));
             dz.addEventListener('mouseleave', () => resetCarPositions());
+            dz.addEventListener('touchstart', (e) => { e.preventDefault(); hoverDropZone(arrayIdx, isFront); }, {passive: false});
+            dz.addEventListener('touchend', (e) => { e.preventDefault(); tryInsertWithGap(fromIdx, arrayIdx, isFront); }, {passive: false});
             dz.addEventListener('click', () => tryInsertWithGap(fromIdx, arrayIdx, isFront));
             
             dropZonesContainer.appendChild(dz);
@@ -527,11 +530,10 @@
             shuffleAllCars();
         });
 
-        // Исправленная логика добавления (теперь всегда ищет комбинации после спавна)
         document.getElementById('btn-add').addEventListener('click', () => {
             if (!gameStarted || isAnimating || movesLeft <= 0) return;
             
-            isAnimating = true; // Блокируем интерфейс на время анимации появления и проверки
+            isAnimating = true; 
             movesLeft--;
             clearDropZones();
             
@@ -542,7 +544,6 @@
             
             spawnCarBehind(true);
             
-            // Ждем завершения анимации появления машинки (0.5s) и запускаем проверку на 3-в-ряд
             setTimeout(() => {
                 processMatches(); 
             }, 500); 
@@ -594,7 +595,6 @@
         }
 
         function endGame(title, desc) {
-            // Расчет времени
             let timePlayed = Math.floor((Date.now() - startTime) / 1000);
             let minutes = Math.floor(timePlayed / 60);
             let seconds = timePlayed % 60;
