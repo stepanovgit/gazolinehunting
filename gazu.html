@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Доберись до заправки</title>
+    <!-- GSAP для анимаций -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            background-color: #000; /* Темный фон для десктопа вокруг игры */
+            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+            touch-action: manipulation; /* Запрет двойного тапа для зума на iOS */
+        }
+
+        /* Главный контейнер (эмуляция экрана смартфона) */
+        #app {
+            width: 100%;
+            max-width: 420px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            background-color: #2c3e50;
+            position: relative;
+            box-shadow: 0 0 30px rgba(0,0,0,0.8);
+        }
+
+        /* Контейнер с дорогой (скроллится) */
+        #road-container {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            position: relative;
+            border-left: 4px dashed #7f8c8d;
+            border-right: 4px solid #7f8c8d;
+            box-sizing: border-box;
+            scroll-behavior: smooth;
+        }
+
+        #road-container::-webkit-scrollbar { width: 6px; }
+        #road-container::-webkit-scrollbar-track { background: transparent; }
+        #road-container::-webkit-scrollbar-thumb { background: #7f8c8d; border-radius: 3px; }
+
+        /* Нижняя фиксированная панель интерфейса */
+        #ui-panel {
+            background: #1a1a2e;
+            padding: 15px 20px;
+            border-top: 2px solid #444;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            z-index: 20;
+            box-shadow: 0 -5px 15px rgba(0,0,0,0.5);
+        }
+
+        .stats-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .stat-block {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .stat-block.right { text-align: right; }
+        .stat-row { font-size: 13px; color: #bdc3c7; text-transform: uppercase; letter-spacing: 1px; }
+        .stat-val { font-size: 28px; font-weight: bold; line-height: 1; margin-top: 4px;}
+
+        #action-controls {
+            display: flex;
+            gap: 10px;
+        }
+
+        #action-controls button {
+            flex: 1;
+            margin: 0;
+            padding: 12px 0;
+            font-size: 26px;
+            background-color: #8e44ad;
+            border: 1px solid #9b59b6;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.1s;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #action-controls button:hover { background-color: #9b59b6; }
+        #action-controls button:active { transform: scale(0.95); }
+
+        /* Заправка */
+        .station-sign {
+            margin-top: 40px;
+            margin-bottom: 20px;
+            text-align: center;
+            position: absolute;
+            width: 100%;
+            top: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .station-title {
+            font-size: 22px;
+            font-weight: 800;
+            color: #f39c12;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            background: rgba(0,0,0,0.4);
+            padding: 5px 15px;
+            border-radius: 8px;
+        }
+
+        .station-icon {
+            font-size: 70px;
+            line-height: 1;
+        }
+
+        #queue-wrapper {
+            position: absolute;
+            top: 220px; /* Опустили из-за большой заправки */
+            width: 100%;
+        }
+
+        .car-slot {
+            position: absolute;
+            left: calc(50% - 40px);
+            width: 80px;
+            height: 100px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 12px;
+            font-size: 50px;
+            cursor: pointer;
+            user-select: none;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            z-index: 2;
+        }
+
+        .car-slot.selected {
+            box-shadow: 0 0 20px 8px rgba(255, 255, 255, 0.7);
+            z-index: 10 !important;
+            transform: scale(1.1);
+        }
+
+        #player-car {
+            position: absolute;
+            left: calc(50% - 40px);
+            width: 80px;
+            height: 100px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 12px;
+            font-size: 50px;
+            background-color: #27ae60;
+            box-shadow: 0 0 20px rgba(39, 174, 96, 0.8);
+            z-index: 3;
+        }
+
+        #player-car::after {
+            content: "Я";
+            position: absolute;
+            font-size: 14px;
+            background: #fff;
+            color: #000;
+            padding: 2px 6px;
+            border-radius: 5px;
+            top: -10px;
+            font-weight: bold;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .drop-zone {
+            position: absolute;
+            left: calc(50% - 45px);
+            width: 90px;
+            height: 40px;
+            z-index: 15;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 30px;
+            color: rgba(255,255,255,0);
+            cursor: pointer;
+            border-radius: 12px;
+            transition: background 0.2s, color 0.2s;
+            box-sizing: border-box;
+        }
+        
+        .drop-zone.visible:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: rgba(255, 255, 255, 0.8);
+            border: 2px dashed rgba(255, 255, 255, 0.4);
+        }
+
+        /* Экраны поверх игры */
+        .screen {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 30;
+            text-align: center;
+            padding: 20px;
+            box-sizing: border-box;
+            backdrop-filter: blur(5px);
+        }
+
+        .screen h1 { margin-top: 0; color: #f39c12; }
+
+        .rules-list {
+            text-align: left;
+            margin: 20px 0;
+            padding-left: 20px;
+            color: #ecf0f1;
+            font-size: 15px;
+            line-height: 1.6;
+        }
+
+        .rules-list li { margin-bottom: 10px; }
+
+        .btn-primary {
+            margin-top: 20px;
+            padding: 15px 40px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+            border-radius: 10px;
+            background-color: #27ae60;
+            color: white;
+            text-transform: uppercase;
+            box-shadow: 0 4px 10px rgba(39, 174, 96, 0.4);
+            transition: transform 0.1s;
+        }
+
+        .btn-primary:active { transform: scale(0.95); }
+    </style>
+</head>
+<body>
+
+    <div id="app">
+        <!-- Скроллящаяся зона -->
+        <div id="road-container">
+            <div class="station-sign">
+                <div class="station-title">Доберись до заправки</div>
+                <div class="station-icon">⛽</div>
+            </div>
+            
+            <div id="queue-wrapper">
+                <div id="drop-zones-container"></div>
+                <div id="player-car">🏎️</div>
+            </div>
+        </div>
+
+        <!-- Нижняя панель управления -->
+        <div id="ui-panel">
+            <div class="stats-container">
+                <div class="stat-block">
+                    <div class="stat-row">Осталось авто</div>
+                    <div id="queue-counter" class="stat-val" style="color: #2ecc71;">30</div>
+                </div>
+                <div class="stat-block right">
+                    <div class="stat-row">Ходы</div>
+                    <div id="moves-counter" class="stat-val" style="color: #e74c3c;">25</div>
+                </div>
+            </div>
+            <div id="action-controls">
+                <button id="btn-shuffle" title="Перемешать всё (-1 ход)">🔀🚗</button>
+                <button id="btn-add" title="Добавить в конец (-1 ход)">➕🚗</button>
+            </div>
+        </div>
+
+        <!-- Стартовый экран -->
+        <div id="start-screen" class="screen">
+            <h1>Доберись до заправки</h1>
+            <ul class="rules-list">
+                <li>Твоя цель — продвинуться вперед и доехать до заправки.</li>
+                <li>Кликни на любую машину, а затем на пустую зону (➕) между авто, чтобы переместить ее туда.</li>
+                <li>Собери линию из 3 одинаковых машин, чтобы они уехали.</li>
+                <li>Ходы ограничены! Используй кнопки внизу, чтобы перемешать машинки или добавить новую (Нажатие на кнопку тратит один ход).</li>
+            </ul>
+            <button class="btn-primary" onclick="startGame()">ИГРАТЬ</button>
+        </div>
+
+        <!-- Экран конца игры -->
+        <div id="game-over-screen" class="screen" style="display: none;">
+            <h1 id="end-title"></h1>
+            <p id="end-desc"></p>
+            <button class="btn-primary" onclick="location.reload()">Сыграть еще</button>
+        </div>
+    </div>
+
+    <script>
+        const TYPES = [
+            { id: 1, color: '#e74c3c', icon: '🚗' },
+            { id: 2, color: '#3498db', icon: '🚙' },
+            { id: 3, color: '#f1c40f', icon: '🚕' },
+            { id: 4, color: '#9b59b6', icon: '🛻' },
+            { id: 5, color: '#e67e22', icon: '🚐' }
+        ];
+        
+        const SLOT_HEIGHT = 115; 
+        const PLAYER_GAP = 140; 
+        const INITIAL_CARS = 30;
+        
+        let queue = []; 
+        let playerPos = INITIAL_CARS; 
+        let movesLeft = 25; // Уменьшенное количество ходов
+        
+        let selectedIndex = null;
+        let isAnimating = false;
+        let gameStarted = false; // Блокировка до нажатия "ИГРАТЬ"
+        
+        const wrapper = document.getElementById('queue-wrapper');
+        const dropZonesContainer = document.getElementById('drop-zones-container');
+        const queueCounterEl = document.getElementById('queue-counter');
+        const movesCounterEl = document.getElementById('moves-counter');
+        const roadContainer = document.getElementById('road-container');
+        const playerCar = document.getElementById('player-car');
+        const startScreen = document.getElementById('start-screen');
+
+        function getCarTop(index) {
+            return index < playerPos ? index * SLOT_HEIGHT : (index * SLOT_HEIGHT) + PLAYER_GAP;
+        }
+
+        // Подготовка визуала игры
+        function initGame() {
+            for (let i = 0; i < INITIAL_CARS; i++) {
+                let randomType;
+                do { randomType = TYPES[Math.floor(Math.random() * TYPES.length)]; } 
+                while (i >= 2 && queue[i-1].id === randomType.id && queue[i-2].id === randomType.id);
+                
+                let el = createCarDOM(randomType, i);
+                queue.push({ ...randomType, el: el });
+            }
+            
+            updateDOMIndices();
+            updateUI();
+        }
+
+        // Запуск самой игры по кнопке
+        function startGame() {
+            startScreen.style.display = 'none';
+            gameStarted = true;
+            
+            // Плавно скроллим к машине игрока
+            setTimeout(() => {
+                roadContainer.scrollTo({
+                    top: playerCar.offsetTop + 220 - window.innerHeight / 2,
+                    behavior: 'smooth'
+                });
+            }, 50);
+        }
+
+        function createCarDOM(type, index) {
+            let el = document.createElement('div');
+            el.className = 'car-slot';
+            el.style.backgroundColor = type.color;
+            el.innerHTML = type.icon;
+            el.style.top = getCarTop(index) + 'px';
+            wrapper.appendChild(el);
+            return el;
+        }
+
+        function updateUI() {
+            queueCounterEl.innerText = playerPos;
+            movesCounterEl.innerText = movesLeft;
+            
+            const totalHeight = (queue.length * SLOT_HEIGHT) + PLAYER_GAP;
+            wrapper.style.height = totalHeight + 'px';
+            playerCar.style.top = (playerPos * SLOT_HEIGHT + 12) + 'px';
+        }
+
+        function updateDOMIndices() {
+            queue.forEach((item, index) => {
+                item.el.dataset.index = index;
+                item.el.onclick = () => handleCarClick(index);
+            });
+        }
+
+        function handleCarClick(index) {
+            if (!gameStarted || isAnimating || movesLeft <= 0) return;
+
+            if (selectedIndex === index) {
+                queue[index].el.classList.remove('selected');
+                selectedIndex = null;
+                clearDropZones();
+                return;
+            }
+
+            if (selectedIndex !== null) {
+                queue[selectedIndex].el.classList.remove('selected');
+            }
+
+            selectedIndex = index;
+            queue[index].el.classList.add('selected');
+            createDropZones(index);
+        }
+
+        function clearDropZones() {
+            dropZonesContainer.innerHTML = '';
+        }
+
+        function createDropZones(fromIdx) {
+            clearDropZones();
+            
+            for (let i = 0; i <= playerPos; i++) {
+                if (fromIdx < playerPos && (i === fromIdx || i === fromIdx + 1)) continue;
+                let topPos = i * SLOT_HEIGHT - 20;
+                addDropZoneDOM(i, true, topPos, fromIdx);
+            }
+            
+            for (let i = playerPos; i <= queue.length; i++) {
+                if (fromIdx >= playerPos && (i === fromIdx || i === fromIdx + 1)) continue;
+                let topPos = i * SLOT_HEIGHT + PLAYER_GAP - 20;
+                
+                if (i === playerPos) {
+                    topPos = (playerPos * SLOT_HEIGHT) + 12 + 100;
+                }
+                addDropZoneDOM(i, false, topPos, fromIdx);
+            }
+        }
+
+        function addDropZoneDOM(arrayIdx, isFront, topPos, fromIdx) {
+            let dz = document.createElement('div');
+            dz.className = 'drop-zone';
+            dz.innerHTML = '➕';
+            dz.style.top = topPos + 'px';
+            
+            dz.addEventListener('mouseenter', () => hoverDropZone(arrayIdx, isFront));
+            dz.addEventListener('mouseleave', () => resetCarPositions());
+            dz.addEventListener('click', () => tryInsertWithGap(fromIdx, arrayIdx, isFront));
+            
+            dropZonesContainer.appendChild(dz);
+            setTimeout(() => dz.classList.add('visible'), 10);
+        }
+
+        function hoverDropZone(targetIdx, isFront) {
+            queue.forEach((car, idx) => {
+                let baseTop = getCarTop(idx);
+                let isBefore = isFront ? (idx < targetIdx) : (idx < targetIdx || idx < playerPos);
+                
+                if (isBefore) gsap.to(car.el, { top: baseTop - 25, duration: 0.3, ease: "power2.out" });
+                else gsap.to(car.el, { top: baseTop + 25, duration: 0.3, ease: "power2.out" });
+            });
+            
+            let playerBase = playerPos * SLOT_HEIGHT + 12;
+            if (isFront) gsap.to(playerCar, { top: playerBase + 25, duration: 0.3, ease: "power2.out" });
+            else gsap.to(playerCar, { top: playerBase - 25, duration: 0.3, ease: "power2.out" });
+        }
+
+        function resetCarPositions() {
+            queue.forEach((car, idx) => {
+                gsap.to(car.el, { top: getCarTop(idx), duration: 0.3, ease: "power2.out" });
+            });
+            gsap.to(playerCar, { top: playerPos * SLOT_HEIGHT + 12, duration: 0.3, ease: "power2.out" });
+        }
+
+        function tryInsertWithGap(fromIdx, targetIdx, isTargetFront) {
+            isAnimating = true;
+            clearDropZones();
+            resetCarPositions();
+            
+            let itemToMove = queue[fromIdx];
+            itemToMove.el.classList.remove('selected');
+            selectedIndex = null;
+            
+            let adjustedTarget = targetIdx > fromIdx ? targetIdx - 1 : targetIdx;
+            let tempQueue = [...queue];
+            let item = tempQueue.splice(fromIdx, 1)[0];
+            tempQueue.splice(adjustedTarget, 0, item);
+            
+            let testPlayerPos = playerPos;
+            if (fromIdx < playerPos) testPlayerPos--;
+            if (isTargetFront) testPlayerPos++;
+            
+            if (getMatches(tempQueue, testPlayerPos).length > 0) {
+                let movedItem = queue.splice(fromIdx, 1)[0];
+                queue.splice(adjustedTarget, 0, movedItem);
+                
+                playerPos = testPlayerPos;
+                updateDOMIndices();
+                
+                queue.forEach((car, idx) => {
+                    car.el.style.zIndex = (car === movedItem) ? 12 : 2;
+                    gsap.to(car.el, { top: getCarTop(idx), duration: 0.4, ease: "power2.inOut" });
+                });
+                
+                setTimeout(() => {
+                    movedItem.el.style.zIndex = 2;
+                    movesLeft--;
+                    spawnCarBehind(false);
+                    processMatches(); 
+                }, 400);
+            } else {
+                isAnimating = false;
+                let targetEl = queue[adjustedTarget] ? queue[adjustedTarget].el : playerCar;
+                gsap.to([itemToMove.el, targetEl], {
+                    x: "+=10", yoyo: true, repeat: 3, duration: 0.05,
+                    onComplete: () => gsap.set([itemToMove.el, targetEl], {x: 0})
+                });
+            }
+        }
+
+        function getMatchesForRawArray(arr) {
+            let matches = new Set();
+            let count = 1;
+            for (let i = 0; i < arr.length - 1; i++) {
+                if (arr[i].id === arr[i+1].id) count++;
+                else {
+                    if (count >= 3) for (let j = 0; j < count; j++) matches.add(i - j);
+                    count = 1;
+                }
+            }
+            if (count >= 3) for (let j = 0; j < count; j++) matches.add(arr.length - 1 - j);
+            return Array.from(matches);
+        }
+
+        function getMatches(arr, pPos) {
+            let front = arr.slice(0, pPos);
+            let back = arr.slice(pPos);
+            let frontMatches = getMatchesForRawArray(front);
+            let backMatches = getMatchesForRawArray(back).map(idx => idx + pPos);
+            return [...frontMatches, ...backMatches].sort((a, b) => b - a);
+        }
+
+        function processMatches() {
+            let matchIndices = getMatches(queue, playerPos);
+            
+            if (matchIndices.length === 0) {
+                isAnimating = false;
+                updateUI();
+                checkGameState();
+                return;
+            }
+
+            let removedInFront = 0;
+            let elementsToRemove = [];
+
+            matchIndices.forEach(idx => {
+                if (idx < playerPos) removedInFront++;
+                elementsToRemove.push(queue[idx].el);
+            });
+
+            gsap.to(elementsToRemove, {
+                scale: 0, rotation: 90, opacity: 0, duration: 0.3, stagger: 0.05,
+                ease: "back.in(1.5)",
+                onComplete: () => {
+                    elementsToRemove.forEach(el => el.remove());
+                    matchIndices.forEach(idx => queue.splice(idx, 1));
+                    playerPos -= removedInFront;
+                    
+                    updateDOMIndices();
+                    updateUI();
+
+                    if (queue.length > 0) {
+                        queue.forEach((item, newIndex) => {
+                            gsap.to(item.el, { top: getCarTop(newIndex), duration: 0.4, ease: "bounce.out" });
+                        });
+                        setTimeout(processMatches, 500); 
+                    } else {
+                        processMatches(); 
+                    }
+                }
+            });
+        }
+
+        function spawnCarBehind(shouldScroll = true) {
+            let randomType = TYPES[Math.floor(Math.random() * TYPES.length)];
+            let newIndex = queue.length;
+            let el = createCarDOM(randomType, newIndex);
+            
+            el.style.opacity = 0; 
+            queue.push({ ...randomType, el: el });
+            
+            gsap.to(el, { opacity: 1, duration: 0.5 });
+            updateDOMIndices();
+            updateUI();
+
+            if (shouldScroll) {
+                setTimeout(() => {
+                    roadContainer.scrollTo({ top: roadContainer.scrollHeight, behavior: 'smooth' });
+                }, 100);
+            }
+        }
+
+        document.getElementById('btn-shuffle').addEventListener('click', () => {
+            if (!gameStarted || isAnimating || movesLeft <= 0 || queue.length === 0) return;
+            movesLeft--;
+            clearDropZones();
+            if (selectedIndex !== null) {
+                queue[selectedIndex].el.classList.remove('selected');
+                selectedIndex = null;
+            }
+            updateUI();
+            shuffleAllCars();
+        });
+
+        document.getElementById('btn-add').addEventListener('click', () => {
+            if (!gameStarted || isAnimating || movesLeft <= 0) return;
+            movesLeft--;
+            clearDropZones();
+            if (selectedIndex !== null) {
+                queue[selectedIndex].el.classList.remove('selected');
+                selectedIndex = null;
+            }
+            spawnCarBehind(true);
+            checkGameState();
+        });
+
+        function shuffleAllCars() {
+            isAnimating = true;
+
+            let front = queue.slice(0, playerPos);
+            let back = queue.slice(playerPos);
+            
+            function doShuffle(arr) {
+                if (arr.length <= 1) return arr;
+                let shuffled = [...arr];
+                let attempts = 0;
+                while (attempts < 50) {
+                    for (let i = shuffled.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+                    }
+                    if (getMatchesForRawArray(shuffled).length === 0) return shuffled;
+                    attempts++;
+                }
+                return shuffled; 
+            }
+
+            queue = [...doShuffle(front), ...doShuffle(back)];
+            updateDOMIndices();
+
+            queue.forEach((item, index) => {
+                gsap.to(item.el, { top: getCarTop(index), duration: 0.6, ease: "power2.inOut" });
+            });
+
+            setTimeout(() => { 
+                isAnimating = false; 
+                checkGameState(); 
+            }, 600);
+        }
+
+        function checkGameState() {
+            if (playerPos <= 0) {
+                endGame("Победа!", "Ты расчистил путь и добрался до заправки!");
+                return;
+            }
+            if (movesLeft <= 0) {
+                endGame("Бензин кончился", "У тебя закончились ходы, а до колонки еще далеко.");
+                return;
+            }
+        }
+
+        function endGame(title, desc) {
+            document.getElementById('end-title').innerText = title;
+            document.getElementById('end-desc').innerText = desc;
+            document.getElementById('game-over-screen').style.display = 'flex';
+        }
+
+        // Генерация уровня сразу при загрузке (на фоне стартового экрана)
+        initGame();
+    </script>
+</body>
+</html>
