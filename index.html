@@ -300,13 +300,13 @@
                 </div>
                 
                 <div class="difficulty-selector">
-                    <button class="diff-btn" data-level="easy">Легкий</button>
-                    <button class="diff-btn active" data-level="medium">Средний</button>
+                    <button class="diff-btn active" data-level="easy">Легкий</button>
+                    <button class="diff-btn" data-level="medium">Средний</button>
                     <button class="diff-btn" data-level="hard">Сложный</button>
                 </div>
-                <div class="diff-desc" id="diff-desc">25 ходов и 30 машин впереди. Для тех, кто уже стоит пару часов в очереди</div>
+                <div class="diff-desc" id="diff-desc">Уровень станет доступен в течение 10-14 дней</div>
                 
-                <button class="btn-primary" id="btn-play">Начать игру</button>
+                <button class="btn-primary" id="btn-play" disabled>Начать игру</button>
             </div>
         </div>
 
@@ -361,7 +361,9 @@
             medium: { text: "25 ходов и 30 машин впереди. Для тех, кто уже стоит пару часов в очереди", disabled: false, cars: 30, moves: 25 },
             hard: { text: "50 ходов и 100 машин впереди. Для тех, кто только встал в очередь", disabled: false, cars: 100, moves: 50 }
         };
-        let currentDiff = 'medium';
+        
+        // Стартовая переменная изменена на 'easy'
+        let currentDiff = 'easy';
 
         document.querySelectorAll('.diff-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
